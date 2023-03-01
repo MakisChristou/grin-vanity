@@ -1,0 +1,14 @@
+[package]
+name = "grin-vanity"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+grin_core = "5.1.2"
+grin_keychain = "5.1.2"
+grin_util = "5.1.2"
+grin_wallet = "5.1.0"
+grin_wallet_libwallet = "5.1.0"
+rand = "0.8.5"
