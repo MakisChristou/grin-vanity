@@ -1,3 +1,4 @@
+use clap::Parser;
 use grin_core::global;
 use grin_core::global::ChainTypes;
 use grin_keychain;
@@ -7,24 +8,22 @@ use grin_util::ToHex;
 use grin_wallet_libwallet;
 use grin_wallet_libwallet::SlatepackAddress;
 use rand::Rng;
-use std::time::Instant;
-use clap::Parser;
 use std::process;
 use std::thread;
+use std::time::Instant;
 
 use ed25519_dalek::PublicKey as edDalekPublicKey;
 use ed25519_dalek::SecretKey as edDalekSecretKey;
+
+mod args;
+use args::Args;
 
 // Measures how many s elapsed since the given instant
 fn time_since(instant: Instant) -> f64 {
     return (instant.elapsed().as_nanos() as f64) / 1_000_000_000f64;
 }
 
-mod args;
-use args::Args;
-
 fn main() {
-
     let args = Args::parse();
 
     // Chosen or default settings
@@ -34,56 +33,81 @@ fn main() {
     if !args.pattern.starts_with("grin1") {
         println!("Pattern needs to start with grin1");
         process::exit(0x1);
+    } else if args.pattern[5..]
+        .to_string()
+        .chars()
+        .any(|c| c == '1' || c == 'i' || c == 'o' || c == 'b')
+    {
+        println!("Invalid pattern");
+        println!("Valid characters are: acdefghjklmnpqrstuvwxyz023456789");
+        std::process::exit(1);
     }
 
-    // let mut rng = rand::thread_rng();
+    let mut handles = Vec::new();
 
-    // let mut bytes = Vec::new();
+    // Spawn worker threads
+    for thread_id in 0..args.threads {
+        let pattern = args.pattern.clone();
 
-    // for _i in 0..24 {
-    //     let random_byte = rng.gen::<u8>();
-    //     bytes.push(random_byte);
-    // }
+        let t = thread::spawn(move || {
+            let mut i = 0;
+            let start_time = Instant::now();
+            let mut stats_timer = Instant::now();
+            grin_core::global::set_local_chain_type(ChainTypes::Mainnet);
 
-    // let seed = grin_keychain::mnemonic::from_entropy(&bytes).unwrap();
+            loop {
+                let loop_time = Instant::now();
+                let bytes: [u8; 32] = rand::thread_rng().gen();
+                let pub_key =
+                    edDalekPublicKey::from(&edDalekSecretKey::from_bytes(&bytes).unwrap());
+                let address = SlatepackAddress::new(&pub_key);
 
-    // let mut keychain = ExtKeychain::from_seed(&bytes, false).unwrap();
+                if thread_id == 0 && time_since(stats_timer) > 1. {
+                    let pattern_length = pattern.len() - 5;
+                    let num_of_patterns = 33_u64.pow(pattern_length as u32);
+                    let iteration_time = time_since(loop_time);
+                    let keys_per_second = 1. / iteration_time * args.threads as f64;
+                    let eta = (iteration_time * num_of_patterns as f64) / args.threads as f64;
 
-    // let test = keychain.pub_root_key().public_key;
+                    print!("{:.2} keys/s ", keys_per_second);
 
-    // println!("{}", seed);
-    // println!("{:?}", test);
+                    if eta < 60. {
+                        println!("eta: {:.2}s", eta as usize);
+                    } else if eta < 3600. {
+                        println!("eta: {:.2}min", eta / 60.);
+                    } else if eta < 86400. {
+                        println!("eta: {:.2}h", eta / 3600.);
+                    } else if eta < 2073600. {
+                        println!("eta: {:.2}d", eta / 86400.);
+                    } else {
+                        println!("eta: {:.2}y", eta / 2073600.);
+                    }
+                    stats_timer = Instant::now();
+                }
 
+                if address.to_string().starts_with(&pattern) {
+                    println!(
+                        "\nFound address: {} \nPrivate Key:   0x{} \n{} keys in {} seconds",
+                        address.to_string(),
+                        edDalekSecretKey::from_bytes(&bytes)
+                            .unwrap()
+                            .to_hex()
+                            .to_string(),
+                        i,
+                        time_since(start_time)
+                    );
+                    process::exit(0x0);
+                }
 
-    grin_core::global::set_local_chain_type(ChainTypes::Mainnet);
+                i += 1;
+            }
+        });
 
-    let mut i = 0;
-    let start_time = Instant::now();
+        handles.push(t);
+    }
 
-    loop {
-        let loop_time = Instant::now();
-        let bytes: [u8; 32] = rand::thread_rng().gen();
-        let pub_key = edDalekPublicKey::from(&edDalekSecretKey::from_bytes(&bytes).unwrap());
-        let address = SlatepackAddress::new(&pub_key);
-
-        if i % 50000 == 0 {
-            println!(
-                "{} keys per second",
-                1. / time_since(loop_time)
-            );
-        }
-
-        if address.to_string().starts_with(&args.pattern) {
-            println!(
-                "\nFound address: {} \nPrivate Key:   0x{} \n{} keys in {} seconds",
-                address.to_string(),
-                edDalekSecretKey::from_bytes(&bytes).unwrap().to_hex().to_string(),
-                i,
-                time_since(start_time)
-            );
-            process::exit(0x0);
-        }
-
-        i += 1;
+    // Wait for threads to finish
+    for handle in handles {
+        handle.join().expect("Error joining worker thread");
     }
 }
