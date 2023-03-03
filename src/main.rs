@@ -3,6 +3,7 @@ use grin_core::global;
 use grin_core::global::ChainTypes;
 use grin_keychain;
 use grin_keychain::keychain::ExtKeychain;
+use grin_keychain::Identifier;
 use grin_keychain::Keychain;
 use grin_util::ToHex;
 use grin_wallet_libwallet;
@@ -48,6 +49,10 @@ fn main() {
     // Spawn worker threads
     for thread_id in 0..args.threads {
         let pattern = args.pattern.clone();
+        let refresh_interval = args.interval.clone();
+        let parent_key_id = Identifier::from_bytes(&vec![
+            02, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
+        ]);
 
         let t = thread::spawn(move || {
             let mut i = 0;
@@ -58,15 +63,27 @@ fn main() {
             loop {
                 let loop_time = Instant::now();
                 let bytes: [u8; 32] = rand::thread_rng().gen();
-                let pub_key =
-                    edDalekPublicKey::from(&edDalekSecretKey::from_bytes(&bytes).unwrap());
-                let address = SlatepackAddress::new(&pub_key);
 
-                if thread_id == 0 && time_since(stats_timer) > 1. {
+                // From seed
+                let keychain = ExtKeychain::from_seed(&bytes, false).unwrap();
+                let sec_addr_key = grin_wallet_libwallet::address::address_from_derivation_path(
+                    &keychain,
+                    &parent_key_id,
+                    0,
+                )
+                .unwrap();
+                let slatepack_address = SlatepackAddress::try_from(&sec_addr_key).unwrap();
+
+                // From raw private key
+                // let pub_key =
+                //     edDalekPublicKey::from(&edDalekSecretKey::from_bytes(&bytes).unwrap());
+                // let address = SlatepackAddress::new(&pub_key);
+
+                if thread_id == 0 && time_since(stats_timer) > refresh_interval as f64 {
                     let pattern_length = pattern.len() - 5;
                     let num_of_patterns = 33_u64.pow(pattern_length as u32);
                     let iteration_time = time_since(loop_time);
-                    let keys_per_second = 1. / iteration_time * args.threads as f64;
+                    let keys_per_second = (1. / iteration_time) * args.threads as f64;
                     let eta = (iteration_time * num_of_patterns as f64) / args.threads as f64;
 
                     print!("{:.2} keys/s ", keys_per_second);
@@ -85,24 +102,32 @@ fn main() {
                     stats_timer = Instant::now();
                 }
 
-                if address.to_string().starts_with(&pattern) {
+                if slatepack_address.to_string().starts_with(&pattern) {
                     println!(
-                        "\nFound address: {} \nPrivate Key:   0x{} \n{} keys in {} seconds",
-                        address.to_string(),
-                        edDalekSecretKey::from_bytes(&bytes)
-                            .unwrap()
-                            .to_hex()
-                            .to_string(),
-                        i,
+                        "\nFound address: {} \nWith Seed:     {} \n{} keys in {} seconds",
+                        slatepack_address.to_string(),
+                        grin_keychain::mnemonic::from_entropy(&bytes).unwrap(),
+                        i * args.threads,
                         time_since(start_time)
                     );
                     process::exit(0x0);
                 }
-
+                // if address.to_string().starts_with(&pattern) {
+                //     println!(
+                //         "\nFound address: {} \nPrivate Key:   0x{} \n{} keys in {} seconds",
+                //         address.to_string(),
+                //         edDalekSecretKey::from_bytes(&bytes)
+                //             .unwrap()
+                //             .to_hex()
+                //             .to_string(),
+                //         i,
+                //         time_since(start_time)
+                //     );
+                //     process::exit(0x0);
+                // }
                 i += 1;
             }
         });
-
         handles.push(t);
     }
 
