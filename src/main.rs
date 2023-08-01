@@ -1,27 +1,20 @@
 use clap::Parser;
-use grin_core::global;
 use grin_core::global::ChainTypes;
-use grin_keychain;
 use grin_keychain::keychain::ExtKeychain;
 use grin_keychain::Identifier;
 use grin_keychain::Keychain;
-use grin_util::ToHex;
-use grin_wallet_libwallet;
 use grin_wallet_libwallet::SlatepackAddress;
 use rand::Rng;
 use std::process;
 use std::thread;
 use std::time::Instant;
 
-use ed25519_dalek::PublicKey as edDalekPublicKey;
-use ed25519_dalek::SecretKey as edDalekSecretKey;
-
 mod args;
 use args::Args;
 
 // Measures how many s elapsed since the given instant
 fn time_since(instant: Instant) -> f64 {
-    return (instant.elapsed().as_nanos() as f64) / 1_000_000_000f64;
+    (instant.elapsed().as_nanos() as f64) / 1_000_000_000f64
 }
 
 fn main() {
@@ -49,9 +42,9 @@ fn main() {
     // Spawn worker threads
     for thread_id in 0..args.threads {
         let pattern = args.pattern.clone();
-        let refresh_interval = args.interval.clone();
-        let parent_key_id = Identifier::from_bytes(&vec![
-            02, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
+        let refresh_interval = args.interval;
+        let parent_key_id = Identifier::from_bytes(&[
+            2, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
         ]);
 
         let t = thread::spawn(move || {
@@ -105,7 +98,7 @@ fn main() {
                 if slatepack_address.to_string().starts_with(&pattern) {
                     println!(
                         "\nFound address: {} \nWith Seed:     {} \n{} keys in {} seconds",
-                        slatepack_address.to_string(),
+                        slatepack_address,
                         grin_keychain::mnemonic::from_entropy(&bytes).unwrap(),
                         i * args.threads,
                         time_since(start_time)
