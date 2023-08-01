@@ -1,7 +1,10 @@
 [package]
 name = "grin-vanity"
 version = "0.1.0"
+description = "A cli vanity address generator for Grin"
 edition = "2021"
+authors = ["Makis Christou <makis_christou@protonmail.com>"]
+license = "GPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
