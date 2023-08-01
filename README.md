@@ -1,5 +1,11 @@
 A commnand-line vanity address generator for Grin. I made this mostly for fun and to familiarize myself with the various Grin libraries written in Rust. The code is currently a lot slower than expected since deriving a slatepack address from a seed seems to be ~1000x slower that deriving it from a raw public key.
 
+# Installation
+
+```bash
+cargo install grin-vanity
+```
+
 # Example usage
 The output below depicts an adrress found with the pattern `grin1test` and its corresponding seed.
 
